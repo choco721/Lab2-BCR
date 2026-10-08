@@ -81,8 +81,12 @@ python scripts/scrape_produccion_se.py ruta/al/estadisticas_biocombustibles.xlsx
 ## Equipo
 
 *Chocobares Juan Cruz*
+
 *Formenti Agustín*
+
 *Morenico Andrés*
+
 *Romero María Florencia*
+
 *Ortíz Victoria*
 
