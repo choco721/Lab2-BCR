@@ -1,0 +1,9 @@
+serie,modelo,unidad,inicio_test,fin_test,n_test,MAPE_pct,RMSE,MAE,acierto_signo_pct
+biodiesel,naive,tn,2025-09,2026-08,12,18.16,20176.45,16963.0,0.0
+biodiesel,naive_estacional,tn,2025-09,2026-08,12,15.78,20746.47,15707.95,58.33
+bioetanol_total,naive,m3,2025-09,2026-08,12,10.3,14046.58,10882.07,0.0
+bioetanol_total,naive_estacional,m3,2025-09,2026-08,12,5.01,7882.48,5327.02,66.67
+bioetanol_maiz,naive,m3,2025-09,2026-08,12,6.56,5649.32,4270.63,0.0
+bioetanol_maiz,naive_estacional,m3,2025-09,2026-08,12,6.55,5208.94,4391.31,58.33
+bioetanol_cana,naive,m3,2025-09,2026-08,12,28.45,11423.26,9046.25,0.0
+bioetanol_cana,naive_estacional,m3,2025-09,2026-08,12,15.53,6252.54,4404.92,91.67
