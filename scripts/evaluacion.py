@@ -38,8 +38,8 @@ def evaluar_modelo(
     serie,
     crear_modelo,
     inicio_entrenamiento,
-    inicio_test="2023-01",
-    fin_test="2025-08",
+    inicio_test="2025-09",
+    fin_test="2026-08",
     nombre_serie="serie",
     nombre_modelo="modelo",
 ):
