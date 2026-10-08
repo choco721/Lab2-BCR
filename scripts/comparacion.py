@@ -1,10 +1,14 @@
 """Arma la tabla comparativa de los modelos de referencia (integración 21/22/23).
 
-Junta las métricas de los baselines (SCRUM-22) y del X-13 (SCRUM-23), que ya
-salen del mismo protocolo de evaluación (SCRUM-21), en un único
-`results/comparacion.csv`. Es el "piso" a superar por los modelos propios.
+Junta las métricas de los baselines (SCRUM-22, `results/baselines.csv`) y del
+X-13 (SCRUM-23, `results/x13.csv`), que salen del mismo protocolo de
+evaluación (SCRUM-21), en un único `results/comparacion.csv`. Es el "piso" a
+superar por los modelos propios.
 
-Requiere que existan results/metricas_baselines.csv y results/x13.csv.
+Los dos CSV traen columnas algo distintas, así que se normalizan a un esquema
+común antes de concatenar.
+
+Requiere que existan results/baselines.csv y results/x13.csv.
 
 Uso: python scripts/comparacion.py
 """
@@ -15,23 +19,41 @@ from pathlib import Path
 
 import pandas as pd
 
+# columnas comunes de la tabla comparativa
+COMUNES = ["serie", "modelo", "inicio_test", "fin_test", "n_test",
+           "MAE", "RMSE", "MAPE_pct", "acierto_signo_pct"]
+# orden de modelos en el resumen (de más simple a más complejo)
+ORDEN = ["naive", "naive_estacional", "x13"]
+
+
+def _normalizar(df: pd.DataFrame) -> pd.DataFrame:
+    """Lleva un CSV de métricas al esquema común.
+
+    Acepta tanto el formato de baselines.csv (con 'n_test') como el del
+    protocolo (x13.csv, con 'meses_evaluados').
+    """
+    df = df.copy()
+    if "n_test" not in df.columns and "meses_evaluados" in df.columns:
+        df["n_test"] = df["meses_evaluados"]
+    return df[COMUNES]
+
 
 def main() -> None:
     res = Path(__file__).resolve().parent.parent / "results"
     partes = []
-    for nombre in ("metricas_baselines.csv", "x13.csv"):
+    for nombre in ("baselines.csv", "x13.csv"):
         p = res / nombre
         if not p.exists():
-            raise FileNotFoundError(f"Falta {p}; corré primero el protocolo y el X-13.")
-        partes.append(pd.read_csv(p))
+            raise FileNotFoundError(f"Falta {p}; corré primero baselines.py y replica_x13.py.")
+        partes.append(_normalizar(pd.read_csv(p)))
 
     comp = pd.concat(partes, ignore_index=True)
     comp.to_csv(res / "comparacion.csv", index=False)
 
-    # resumen legible: MAPE y acierto de signo por serie y modelo
+    # resumen legible
     mape = comp.pivot_table(index="serie", columns="modelo", values="MAPE_pct").round(1)
     signo = comp.pivot_table(index="serie", columns="modelo", values="acierto_signo_pct").round(0)
-    orden = [c for c in ["ultimo_valor", "estacional", "x13"] if c in mape.columns]
+    orden = [c for c in ORDEN if c in mape.columns]
     mape, signo = mape[orden], signo[orden]
 
     print("MAPE % por serie y modelo (menor = mejor):")
