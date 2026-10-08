@@ -146,6 +146,24 @@ def _parsear_hoja(contenido: bytes, engine: str, hoja: str, columnas: list[str])
     return df.reset_index(drop=True)
 
 
+def _chequear_meses(df: pd.DataFrame, nombre: str) -> None:
+    """Avisa si faltan meses en la serie (gaps en el índice mensual).
+
+    Si la Secretaría cambia la abreviatura de un mes (p. ej. 'sept' en vez de
+    'sep'), esa fila se descarta al parsear y queda un hueco silencioso. Este
+    chequeo lo detecta comparando contra el rango mensual completo esperado.
+
+    Args:
+        df: DataFrame con columna 'fecha' mensual.
+        nombre: Nombre de la serie, para el mensaje.
+    """
+    esperado = pd.date_range(df["fecha"].min(), df["fecha"].max(), freq="MS")
+    faltan = esperado.difference(pd.to_datetime(df["fecha"]))
+    if len(faltan):
+        print(f"  ¡ATENCIÓN! {nombre}: faltan {len(faltan)} meses → "
+              f"{[d.strftime('%Y-%m') for d in faltan]}")
+
+
 def main() -> None:
     origen = sys.argv[1] if len(sys.argv) > 1 else None
     contenido = _leer_bytes(origen)
@@ -153,18 +171,24 @@ def main() -> None:
 
     out_dir = Path(__file__).resolve().parent.parent / "data"
     out_dir.mkdir(exist_ok=True)
+    # copia fechada de cada descarga, para el análisis de revisiones (SCRUM-20)
+    hist_dir = out_dir / "historico"
+    hist_dir.mkdir(exist_ok=True)
+    hoy = pd.Timestamp.today().strftime("%Y-%m-%d")
 
     biodiesel = _parsear_hoja(contenido, engine, "RESUMEN BIODIESEL", COLS_BIODIESEL)
     bioetanol = _parsear_hoja(contenido, engine, "RESUMEN BIOETANOL", COLS_BIOETANOL)
 
-    biodiesel.to_csv(out_dir / "produccion_biodiesel.csv", index=False)
-    bioetanol.to_csv(out_dir / "produccion_bioetanol.csv", index=False)
-
     for nombre, df in (("biodiesel", biodiesel), ("bioetanol", bioetanol)):
+        _chequear_meses(df, nombre)
+        df.to_csv(out_dir / f"produccion_{nombre}.csv", index=False)
+        # snapshot con la fecha de descarga (no pisa; sirve para comparar revisiones)
+        df.to_csv(hist_dir / f"produccion_{nombre}_{hoy}.csv", index=False)
         print(
             f"produccion_{nombre}.csv: {len(df)} meses "
             f"({df['fecha'].min():%Y-%m} a {df['fecha'].max():%Y-%m}), "
-            f"{int(df['provisorio'].sum())} provisorios"
+            f"{int(df['provisorio'].sum())} provisorios  "
+            f"[copia: historico/produccion_{nombre}_{hoy}.csv]"
         )
 
 
