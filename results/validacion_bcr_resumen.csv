@@ -1,0 +1,7 @@
+serie,componente,n,corr,err_rel_%
+biodiesel,est,223,0.9996,0.208
+biodiesel,tend,223,1.0,0.196
+biodiesel,desest,223,1.0,0.208
+bioetanol,est,199,1.0,0.037
+bioetanol,tend,199,1.0,0.002
+bioetanol,desest,199,1.0,0.003
