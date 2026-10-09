@@ -105,8 +105,14 @@ def scrape_biodiesel() -> pd.DataFrame:
     df.columns = ["periodo", "precio"]
     df["fecha"] = df["periodo"].apply(_parse_periodo)
     df = df.dropna(subset=["fecha"])
+    # El precio puede venir con marcadores ('44.121 *' = provisorio) y notas.
+    # Extraemos solo la parte numérica y normalizamos el separador de miles.
     df["precio"] = (
-        df["precio"].astype(str).str.replace(".", "", regex=False).astype(float)
+        df["precio"].astype(str)
+        .str.extract(r"([\d.,]+)")[0]
+        .str.replace(".", "", regex=False)
+        .str.replace(",", ".", regex=False)
+        .astype(float)
     )
     df = df.sort_values("fecha").drop_duplicates(subset="fecha", keep="last")
     return df[["fecha", "precio"]].rename(columns={"precio": "precio_ars_tn"})
