@@ -14,6 +14,7 @@ Requiere: pip install requests pandas lxml
 
 from __future__ import annotations
 
+import io
 import re
 from pathlib import Path
 
@@ -39,9 +40,31 @@ def _fetch_tables(url: str) -> list[pd.DataFrame]:
     Returns:
         Lista de tablas encontradas en la página (pandas.read_html).
     """
-    resp = requests.get(url, timeout=30)
+    # Muchos sitios de gobierno devuelven una página de error si el request no
+    # parece venir de un navegador: mandamos un User-Agent de navegador.
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+        )
+    }
+    resp = requests.get(url, headers=headers, timeout=30)
+    resp.raise_for_status()
     resp.encoding = "iso-8859-1"  # el sitio publica en Latin-1, no UTF-8
-    return pd.read_html(resp.text)
+
+    # Si la página no trae tablas (p. ej. devolvió un "404 / page not found"),
+    # pandas tira un error críptico. Lo detectamos y avisamos claro.
+    if "<table" not in resp.text.lower():
+        raise RuntimeError(
+            f"La página {url} no devolvió ninguna tabla (¿el sitio está caído, "
+            f"la URL cambió, o un antivirus/firewall intercepta el pedido?). "
+            f"Probá abrir esa URL en el navegador: si ves un error, el problema "
+            f"es de la fuente o de tu red, no del script."
+        )
+
+    # pandas 2.2+ (y Python nuevo) ya no acepta un string crudo: hay que
+    # envolverlo en io.StringIO.
+    return pd.read_html(io.StringIO(resp.text))
 
 
 def _parse_periodo(texto: str) -> pd.Timestamp | None:
