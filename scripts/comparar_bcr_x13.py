@@ -13,6 +13,10 @@ descomposición contra los de BCR:
 Confirma que la réplica reproduce el método de BCR. Resultado obtenido:
 correlación >= 0.9996 y error relativo < 0.21 % en todos los componentes.
 
+Uso:
+    python scripts/comparar_bcr_x13.py ruta/a/BIOCOMBUSTIBLES.xlsx
+
+Requiere: pip install x13binary pandas numpy matplotlib openpyxl
 """
 
 from __future__ import annotations
@@ -47,14 +51,19 @@ def descomponer(serie: pd.Series, log: bool) -> pd.DataFrame:
         DataFrame indexado por fecha con columnas ``est``, ``tend`` y ``desest``.
     """
     vals = serie.values
-    start = f"{serie.index[0].year}.{serie.index[0].month}"
+    primero = serie.index[0]
+    start = f"{primero.year}.{primero.month}"
     data = "\n".join("  " + " ".join(f"{v:.3f}" for v in vals[i:i + 10])
                      for i in range(0, len(vals), 10))
     tr = "log" if log else "none"
+    # Misma config que el .spc real de BCR (ver referencia/spc/): modelo desde
+    # 2013, corrección de días hábiles y Pascua, y los órdenes del automdl.
+    modelspan = "  modelspan=(2013.1, )\n" if (primero.year, primero.month) <= (2013, 1) else ""
     spec = (
-        f"series{{ start={start} period=12 data=(\n{data}\n ) }}\n"
+        f"series{{ start={start} period=12\n{modelspan}  data=(\n{data}\n ) }}\n"
         f"transform{{ function={tr} }}\n"
-        "automdl{}\n"
+        "regression{ aictest=(td easter) }\n"
+        "automdl{ maxdiff=(2 1) maxorder=(4 2) }\n"
         "x11{ save=(d10 d11 d12) }\n"
     )
     with tempfile.TemporaryDirectory() as tmp:

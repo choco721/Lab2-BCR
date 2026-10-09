@@ -56,10 +56,20 @@ def _escribir_spec(serie: pd.Series, carpeta: Path, log: bool) -> Path:
     chunks = [vals[i:i + 10] for i in range(0, len(vals), 10)]
     datalines = "\n".join("    " + " ".join(f"{v:.3f}" for v in c) for c in chunks)
     transform = "transform{ function=log }" if log else "transform{ function=none }"
+
+    # Config tomada de los .spc reales de BCR (referencia/spc/):
+    #  - modelspan desde 2013: el modelo regARIMA se ajusta desde 2013,
+    #    aunque la serie arranque antes (la descomposición usa todo el span).
+    #  - regression aictest=(td easter): corrige días hábiles y Pascua.
+    #  - automdl con los mismos límites que usan ellos.
+    # (primero puede ser Timestamp o Period según quién llame; comparamos año/mes)
+    antes_de_2013 = (primero.year, primero.month) <= (2013, 1)
+    modelspan = "  modelspan=(2013.1, )\n" if antes_de_2013 else ""
     spec = (
-        f"series{{\n  start={start}\n  period=12\n  data=(\n{datalines}\n  )\n}}\n"
+        f"series{{\n  start={start}\n  period=12\n{modelspan}  data=(\n{datalines}\n  )\n}}\n"
         f"{transform}\n"
-        "automdl{}\n"
+        "regression{ aictest=(td easter) }\n"
+        "automdl{ maxdiff=(2 1) maxorder=(4 2) }\n"
         "forecast{ maxlead=1 save=(fct) }\n"
     )
     base = carpeta / "run"
