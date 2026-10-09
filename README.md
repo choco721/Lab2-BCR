@@ -7,14 +7,15 @@ Proyecto del **Laboratorio de Consultoría de Datos 2** (UCA Rosario) junto a la
 
 La BCR publica mensualmente el **IACA** (Índice de Actividad de la Cadena
 Agropecuaria). Una de sus componentes es la producción de biodiesel y
-bioetanol, cuyo dato oficial lo informa la **Secretaría de Energía** con
-retraso. Para publicar a tiempo, la BCR **estima** ese dato con un modelo
-estadístico (X-13ARIMA-SEATS, de la familia SARIMA).
+bioetanol, cuyo dato oficial lo informa la **Secretaría de Energía** con unos
+dos meses de retraso. Para publicar a tiempo, la BCR **estima** ese dato con
+**X-13ARIMA-SEATS**, el software estándar de ajuste estacional del Census de
+EE. UU. (el mismo que usa el INDEC).
 
 El objetivo del proyecto es **mejorar esa estimación aplicando modelos de
 machine learning** a la predicción de series de tiempo. El target es la
-**producción mensual** (toneladas de biodiesel, m³ de bioetanol), no el
-precio.
+**producción mensual** (toneladas de biodiesel; m³ de bioetanol total, de maíz
+y de caña), no el precio.
 
 ## Estructura del repositorio
 
@@ -22,11 +23,16 @@ precio.
 BCR/
 ├── data/           # series mensuales en CSV (target + variables externas)
 ├── notebooks/      # análisis exploratorio y modelado
-├── scripts/        # scrapers de cada fuente
+├── scripts/        # scrapers, protocolo de evaluación y modelos de referencia
+├── results/        # métricas y salidas de los modelos
+├── spc/            # configuración real del X-13 de la BCR (archivos .spc)
+├── docs/           # documentación (protocolo de evaluación)
 └── README.md
 ```
 
 ## Fuentes de datos
+
+Todo es dato **público y oficial**.
 
 | Archivo | Contenido | Fuente | Rango |
 |---|---|---|---|
@@ -37,14 +43,18 @@ BCR/
 | `biodiesel_precios.csv` | Precio regulado del biodiesel | Secretaría de Energía | 2018→ |
 | `bioetanol_precios.csv` | Precio regulado del bioetanol (caña y maíz) | Secretaría de Energía | 2018→ |
 
-Los precios regulados son **variables externas candidatas**; se decide si
-entran al modelo en el análisis de variables (Etapa 3).
+Los precios, el tipo de cambio y los granos son **variables externas
+candidatas**; se decide cuáles entran al modelo en el análisis de variables
+(Etapa 3/4).
 
 ## Requisitos
 
 ```bash
-pip install pandas numpy openpyxl xlrd requests beautifulsoup4 matplotlib statsmodels jupyter
+pip install pandas numpy openpyxl xlrd requests beautifulsoup4 matplotlib statsmodels jupyter x13binary
 ```
+
+`x13binary` trae el motor del X-13; no hace falta instalar el programa del
+Census ni el Win X-13.
 
 ## Cómo actualizar los datos
 
@@ -59,34 +69,71 @@ python scripts/scrape_biocombustibles.py   # precios regulados
 ```
 
 `scrape_produccion_se.py` también acepta la ruta a un `.xlsx` local como
-argumento, por si la descarga automática falla:
+argumento, por si la descarga automática falla, y guarda una copia fechada de
+cada descarga en `data/historico/` (para analizar revisiones de provisorios):
 
 ```bash
 python scripts/scrape_produccion_se.py ruta/al/estadisticas_biocombustibles.xlsx
 ```
 
+## Modelos de referencia
+
+Todo se evalúa con el **mismo protocolo** (`scripts/evaluacion.py`):
+walk-forward a un mes (el modelo se reentrena cada mes y predice el
+siguiente), ventana de test **sep-2025 → ago-2026**, métricas MAE/RMSE/MAPE y
+acierto de signo.
+
+```bash
+python scripts/baselines.py        # naive y naive estacional
+python scripts/replica_x13.py      # réplica del X-13 de la BCR (tarda unos minutos)
+python scripts/comparar_bcr_x13.py ruta/al/BIOCOMBUSTIBLES.xlsx   # validación contra su corrida real
+python scripts/comparacion.py      # arma la tabla comparativa final
+```
+
+La réplica del X-13 usa la **configuración real de la BCR** (sus archivos
+`.spc` en `spc/`): modelo ajustado desde 2013, corrección de días hábiles y
+Pascua, y los órdenes de su `automdl`. Con esto reproduce su corrida **exacta**
+(0,0 % de diferencia en la predicción y en la descomposición).
+
+## Resultados (benchmark a superar)
+
+MAPE (%) por serie y modelo, test sep-2025 → ago-2026 (`results/comparacion.csv`):
+
+| Serie | naive | naive estacional | X-13 (config BCR) | Mejor |
+|---|---|---|---|---|
+| biodiesel | 18,2 | **15,8** | 21,0 | naive estacional |
+| bioetanol total | 10,3 | **5,0** | 7,8 | naive estacional |
+| bioetanol maíz | 6,6 | 6,6 | **6,0** | X-13 |
+| bioetanol caña | 28,4 | **15,5** | 16,4 | naive estacional |
+
+**Hallazgo central:** con su configuración real, el X-13 de la BCR es superado
+por un *naive estacional* en 3 de las 4 series. En biodiesel el modelo que
+elige la BCR **no tiene componente estacional** (un `(2 0 1)`), pese a que el
+EDA marca estacionalidad fuerte. Ahí está el margen de mejora que atacan los
+modelos propios (SARIMAX, ML, LSTM) sumando estacionalidad y variables
+externas (que la BCR hoy no usa).
+
 ## Notebooks
 
-- `notebooks/eda_produccion.ipynb` — análisis exploratorio del target:
-  tendencia, estacionalidad, estacionariedad, outliers y propuesta de
-  transformación por serie.
+- `notebooks/eda_produccion.ipynb` — análisis exploratorio del target: nivel,
+  índice base 2013, log y variación mensual, estacionalidad (STL), ACF/PACF,
+  estacionariedad (ADF) y outliers, para las cuatro series.
+- `notebooks/replica_x13.ipynb` — réplica del X-13 de la BCR con su config
+  real, descomposición, validación contra su corrida y comparación contra los
+  baselines.
 
 ## Estado del proyecto
 
 - [x] **Etapa 1** — Entendimiento del problema y del modelo actual de la BCR.
 - [x] **Etapa 2** — Recolección de datos (target + variables externas).
-- [~] **Etapa 3** — Análisis exploratorio (EDA de producción hecho).
-- [ ] **Etapa 4** — Modelado (baselines, réplica de X-13, SARIMAX, ML, LSTM).
+- [x] **Etapa 3** — Análisis exploratorio (EDA del target).
+- [~] **Etapa 4** — Modelado: baselines, protocolo de evaluación y réplica del
+  X-13 **hechos**. Pendientes: variables externas, SARIMAX, ML y LSTM.
 
 ## Equipo
 
-*Chocobares Juan Cruz*
-
-*Formenti Agustín*
-
-*Morenico Andrés*
-
-*Romero María Florencia*
-
-*Ortíz Victoria*
-
+- Chocobares, Juan Cruz
+- Formenti, Agustín
+- Morenico, Andrés
+- Romero, María Florencia
+- Ortíz, Victoria
